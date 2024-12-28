@@ -469,6 +469,7 @@ void Predictor::Perceive(int bit) {
 }
 
 void Predictor::Pretrain(int bit) {
+  try {
   for (const auto& model : models_) {
     model->Predict();
   }
@@ -483,5 +484,10 @@ void Predictor::Pretrain(int bit) {
       model->ByteUpdate();
     }
     manager_.bit_context_ = 1;
+  }
+  } catch (const std::exception& e) {
+    std::cerr << "Error during Pretrain: " << e.what() << std::endl;
+  } catch (...) {
+    std::cerr << "Unknown error during Pretrain" << std::endl;
   }
 }

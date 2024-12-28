@@ -32,7 +32,11 @@ int Help() {
 }
 
 void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
-    bool dictionary_used, std::ofstream* os) {
+  bool dictionary_used, std::ofstream* os) {
+    if (!os->is_open()) {
+      std::cerr << "Error: output file not open" << std::endl;
+      return;
+    }
   for (int i = 4; i >= 0; --i) {
     char c = length >> (8*i);
     if (i == 4) {
@@ -40,6 +44,10 @@ void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
       if (dictionary_used) c |= 0x80;
     }
     os->put(c);
+    if (os->fail()) {
+      std::cerr << "Error: failed to write header" << std::endl;
+      return;
+    }
   }
   if (length < kMinVocabFileSize) return;
   for (int i = 0; i < 32; ++i) {
@@ -48,6 +56,10 @@ void WriteHeader(unsigned long long length, const std::vector<bool>& vocab,
       if (vocab[i * 8 + j]) c += 1<<j;
     }
     os->put(c);
+    if (os->fail()) {
+      std::cerr << "Error: failed to write header" << std::endl;
+      return;
+    }
   }
 }
 

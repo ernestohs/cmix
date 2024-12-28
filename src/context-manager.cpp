@@ -1,50 +1,100 @@
 #include "context-manager.h"
+#include <stdexcept>
 
-ContextManager::ContextManager() : history_(100000000, 0),
-    shared_map_(256*8000000, 0), words_(8, 0), recent_bytes_(8, 0) {}
+class ContextManagerException : public std::runtime_error {
+public:
+    explicit ContextManagerException(const char* message) : std::runtime_error(message) {}
+};
 
-const Context& ContextManager::AddContext(std::unique_ptr<Context> context) {
-  for (const auto& old : contexts_) {
-    if (old->IsEqual(context.get())) return *old;
-  }
-  contexts_.push_back(std::move(context));
-  return *(contexts_[contexts_.size() - 1]);
+ContextManager::ContextManager() try : 
+    history_(100000000, 0),
+    shared_map_(256*8000000, 0), 
+    words_(8, 0), 
+    recent_bytes_(8, 0) {
+    if (history_.size() != 100000000 || shared_map_.size() != 256*8000000) {
+        throw ContextManagerException("Failed to allocate memory for context manager");
+    }
+} catch (const std::bad_alloc& e) {
+    throw ContextManagerException("Memory allocation failed in ContextManager constructor");
 }
 
-const BitContext& ContextManager::AddBitContext(std::unique_ptr<BitContext>
-    bit_context) {
-  for (const auto& old : bit_contexts_) {
-    if (old->IsEqual(bit_context.get())) return *old;
-  }
-  bit_contexts_.push_back(std::move(bit_context));
-  return *(bit_contexts_[bit_contexts_.size() - 1]);
+const Context& ContextManager::AddContext(std::unique_ptr<Context> context) {
+    try {
+        if (!context) {
+            throw ContextManagerException("Null context provided");
+        }
+        
+        for (const auto& old : contexts_) {
+            if (!old) {
+                throw ContextManagerException("Invalid context in contexts_ container");
+            }
+            if (old->IsEqual(context.get())) return *old;
+        }
+        
+        contexts_.push_back(std::move(context));
+        return *(contexts_.back());
+    } catch (const std::bad_alloc& e) {
+        throw ContextManagerException("Memory allocation failed while adding context");
+    }
+}
+
+const BitContext& ContextManager::AddBitContext(std::unique_ptr<BitContext> bit_context) {
+    try {
+        if (!bit_context) {
+            throw ContextManagerException("Null bit context provided");
+        }
+        
+        for (const auto& old : bit_contexts_) {
+            if (!old) {
+                throw ContextManagerException("Invalid bit context in bit_contexts_ container");
+            }
+            if (old->IsEqual(bit_context.get())) return *old;
+        }
+        
+        bit_contexts_.push_back(std::move(bit_context));
+        return *(bit_contexts_.back());
+    } catch (const std::bad_alloc& e) {
+        throw ContextManagerException("Memory allocation failed while adding bit context");
+    }
 }
 
 void ContextManager::UpdateHistory() {
-  history_[history_pos_] = bit_context_;
-  ++history_pos_;
-  if (history_pos_ == history_.size()) history_pos_ = 0;
+    try {
+        if (history_pos_ >= history_.size()) {
+            throw ContextManagerException("History position out of bounds");
+        }
+        history_[history_pos_] = bit_context_;
+        ++history_pos_;
+        if (history_pos_ == history_.size()) history_pos_ = 0;
+    } catch (const std::out_of_range& e) {
+        throw ContextManagerException("Access violation in UpdateHistory");
+    }
 }
 
 void ContextManager::UpdateWords() {
-  unsigned char c = bit_context_;
-  if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c >= 0x80) {
-    words_[7] = words_[7] * 997*16 + c;
-  } else {
-    words_[7] = 0;
-  }
-  if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
-  if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == 8 || c == 6 ||
-      c >= 0x80) {
-    words_[0] = words_[0] * 997*16 + c;
-    words_[0] &= 0xfffffff;
-    words_[1] = words_[1] * 263*32 + c;
-  } else {
-    for (int i = 6; i >= 2; --i) {
-      words_[i] = words_[i-1];
+    try {
+        unsigned char c = bit_context_;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c >= 0x80) {
+            words_[7] = words_[7] * 997*16 + c;
+        } else {
+            words_[7] = 0;
+        }
+        
+        if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == 8 || c == 6 ||
+            c >= 0x80) {
+            words_[0] = words_[0] * 997*16 + c;
+            words_[0] &= 0xfffffff;
+            words_[1] = words_[1] * 263*32 + c;
+        } else {
+            for (int i = 6; i >= 2; --i) {
+                words_[i] = words_[i-1];
+            }
+            words_[1] = 0;
+        }
+    } catch (const std::out_of_range& e) {
+        throw ContextManagerException("Array access violation in UpdateWords");
     }
-    words_[1] = 0;
-  }
 }
 
 void ContextManager::UpdateRecentBytes() {
